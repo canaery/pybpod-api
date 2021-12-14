@@ -161,6 +161,9 @@ class BpodBase(object):
         # check if any module is connected
         self.bpod_modules = self._bpodcom_get_modules_info(self._hardware)
 
+        if machine_type > 3:
+            self._hardware.flex_channel_types = self._bpodcom_get_flex_channel_types(self._hardware.n_flex_channels)
+        
         self._hardware.setup(self.bpod_modules)
 
         # initialise the server to handle commands
@@ -386,9 +389,9 @@ class BpodBase(object):
 
         :param int serial_channel: Serial port to send, 1, 2 or 3
         :param int message_ID: Unique id for the message. Should be between 1 and 255
-        :param list(int) serial_message: Message to send. The message should be bigger than 3 bytes.
+        :param list(int) serial_message: Message to send. The message cannot be bigger than 3 bytes on Bpod r2.0 and 5 bytes on Bpod r2+
         """
-        response = self._bpodcom_load_serial_message(serial_channel, message_ID, serial_message, 1)
+        response = self._bpodcom_load_serial_message(serial_channel, message_ID, serial_message, 1, self._hardware.serial_message_max_bytes)
 
         if not response:
             raise BpodErrorException('Error: Failed to set serial message.')
@@ -431,6 +434,123 @@ class BpodBase(object):
         # call module_write. on module reference
         if module:
             self._bpodcom_module_write(module_index - 1, msg)
+
+    def set_flex_channel_types(self, channel_types):
+        """
+        Configure channel types for Flex channels on Bpod r2+ (machine_type 4).
+        Channel types can be:
+        0 = digital input, 5V tolerant,
+        1 = digital output, 5V,
+        2 = analog input, 0-5V, 12 bit,
+        3 = analog output, 0-5V, 12 bit
+        
+        :param list[int] channel_types: Channel types are: 0 = DI, 1 = DO, 2 = ADC, 3 = DAC
+        """
+        if self._hardware.machine_type > 3:
+            for val in channel_types:
+                if (val < 0) or (val > 3):
+                    raise BpodErrorException("Error: Invalid flex channel type given. Must be between 0 and 3.")
+
+            if not self._bpodcom_set_flex_channel_types(channel_types):
+                raise BpodErrorException("Error: Failed to set flex channel types.")
+
+            self._hardware.flex_channel_types = channel_types
+            self._hardware.setup(self.bpod_modules)  # Must rename inputs and outputs to reflect new flex channel types
+        
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+    
+    def set_analog_input_thresholds(self, thresholds_1, thresholds_2):
+        """
+        Set the analog input thresholds for all flex channels, regardless of whether they are configured for analog input.
+        Each analog input channel has two thresholds that can each be set by the user. Compatible only with Bpod r2+ (machine type 4).
+
+        :param list[int] thresholds_1: List of the first threshold values for each channel. Units are bits ranging from 0 to 4095.
+        :param list[int] thresholds_2: List of the second threshold values for each channel. Units are bits ranging from 0 to 4095.
+        """
+        if self._hardware.machine_type > 3:
+            combined = thresholds_1 + thresholds_2  # combine the two lists to loop through them and check each threshold is within range.
+            for val in combined:
+                if (val < 0) or (val > 4095):
+                    raise BpodErrorException("Error: Threshold values must be between 0 and 4095.")
+
+            if not self._bpodcom_set_analog_input_thresholds(thresholds_1, thresholds_2):
+                raise BpodErrorException("Error: Failed to set analog input thresholds.")
+            
+            self._hardware.analog_input_thresholds_1 = thresholds_1
+            self._hardware.analog_input_thresholds_2 = thresholds_2
+        
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+
+    def set_analog_input_threshold_polarity(self, polarity_1, polarity_2):
+        """
+        Set the analog input threshold polarity for both thresholds on all flex channels.
+        Polarity of 0 indicates to trigger once the analog input value becomes greater than the threshold.
+        Polarity of 1 indicates to trigger once the analog input value becomes less than the threshold.
+
+        :param list[int] polarity_1: List of polarities of the first threshold for each channel. Values are 0 or 1.
+        :param list[int] polarity_2: List of polarities of the second threshold for each channel. Values are 0 or 1.
+        """
+        if self._hardware.machine_type > 3:
+            combined = polarity_1 + polarity_2  # combine the two lists to loop through them and check each polarity is either 0 or 1.
+            for val in combined:
+                if (val < 0) or (val > 1):
+                    raise BpodErrorException("Error: Polarity values must be either 0 or 1.")
+
+            if not self._bpodcom_set_analog_input_threshold_polarity(polarity_1, polarity_2):
+                raise BpodErrorException("Error: Failed to set analog input threshold polarity.")
+            
+            self._hardware.analog_input_threshold_polarity_1 = polarity_1
+            self._hardware.analog_input_threshold_polarity_2 = polarity_2
+        
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+
+    def set_analog_input_threshold_mode(self, modes):
+        """
+        Set the analog input threshold mode for all flex channels.
+        When mode is set to 0, each threshold for that channel becomes disabled once it is triggered and must be re-enabled by the state machine.
+        When mode is set to 1, each threshold for that channel re-enables the other threshold before becoming disabled itself once it is triggered.
+
+        :param list[int] modes: List of modes for each channel. Value is 0 or 1.
+        """
+        if self._hardware.machine_type > 3:
+            for val in modes:
+                if (val < 0) or (val > 1):
+                    raise BpodErrorException("Error: Mode can only be either 0 or 1.")
+            
+            if not self._bpodcom_set_analog_input_threshold_mode(modes):
+                raise BpodErrorException("Error: Failed to set analog input threshold mode.")
+
+            self._hardware.analog_input_threshold_mode = modes
+        
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+
+    def enable_analog_input_threshold(self, channel, threshold, value):
+        """
+        Enable an analog input threshold for a given flex channel. Compatible only with Bpod r2+ (machine type 4).
+
+        :param int channel: Flex channel number (1 - 4).
+        :param int threshold: Threshold number (1 or 2).
+        :param int value: Disabled = 0, Enabled = 1.
+        """
+        if self._hardware.machine_type > 3:
+            if (channel < 1) or (channel > self._hardware.n_flex_channels):
+                raise BpodErrorException("Error: Invalid flex channel number.")
+            if (threshold < 1) or (threshold > 2):
+                raise BpodErrorException("Error: Invalid threshold number.")
+            if (value < 0) or (value > 1):
+                raise BpodErrorException("Error: Enable value must be either 0 or 1.")
+            
+            if not self._bpodcom_enable_analog_input_threshold(channel, threshold, value):
+                raise BpodErrorException("Error: Failed to enable analog input threshold.")
+            
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+            
+
 
     #########################################
     ############ PRIVATE METHODS ############

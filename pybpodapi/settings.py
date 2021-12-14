@@ -1,7 +1,9 @@
 # !/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-PYBPOD_API_LOG_LEVEL = None
+import logging
+
+PYBPOD_API_LOG_LEVEL = logging.DEBUG
 PYBPOD_API_LOG_FILE = "pybpod-api.log"
 
 PYBPOD_API_MODULES = [
@@ -9,7 +11,7 @@ PYBPOD_API_MODULES = [
 ]
 
 # stream the session file to the stdin (terminal)
-PYBPOD_API_STREAM2STDOUT = True
+PYBPOD_API_STREAM2STDOUT = False
 # accept commands from the stdin
 PYBPOD_API_ACCEPT_STDIN = False
 
@@ -18,7 +20,9 @@ PYBPOD_API_ACCEPT_STDIN = False
 # TARGET_BPOD_FIRMWARE_VERSION = "13" # 0.7.9
 # TARGET_BPOD_FIRMWARE_VERSION = "15" # 0.8
 # TARGET_BPOD_FIRMWARE_VERSION = "17" # 0.9
-TARGET_BPOD_FIRMWARE_VERSION = "22"
+# TARGET_BPOD_FIRMWARE_VERSION = "22"
+TARGET_BPOD_FIRMWARE_VERSION = "23"
+
 
 PYBPOD_SERIAL_PORT = None
 PYBPOD_NET_PORT = None
@@ -30,6 +34,7 @@ PYBPOD_SYNC_MODE = 1
 BPOD_BNC_PORTS_ENABLED = [True, True]
 BPOD_WIRED_PORTS_ENABLED = [True, True]
 BPOD_BEHAVIOR_PORTS_ENABLED = [True, True, True, True, True, True, True, True]
+BPOD_FLEX_PORTS_ENABLED = [True, True, True, True]
 
 PYBPOD_SERIAL_PORT = ""
 

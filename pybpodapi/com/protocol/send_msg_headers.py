@@ -34,6 +34,24 @@ class SendMessageHeader(object):
     #: Request enable input ports
     ENABLE_PORTS = "E"
 
+    #: Set Flex channel types
+    SET_FLEX_CHANNEL_TYPES = "Q"
+
+    #: Request current Flex channel types
+    GET_FLEX_CHANNEL_TYPES = "q"
+
+    #: Set the analog input thresholds for all Flex channels, regardless of whether they are currently configured as analog inputs.
+    SET_ANALOG_INPUT_THRESHOLDS = "t"
+
+    #: Set the analog input threshold polarity for both thresholds on all Flex channels.
+    SET_ANALOG_INPUT_THRESHOLD_POLARITY = "p"
+
+    #: Set the threshold activation mode for all Flex channels.
+    SET_ANALOG_INPUT_THRESHOLD_MODE = "m"
+
+    #: Enable a single threshold on a single Flex channel.
+    ENABLE_ANALOG_INPUT_THRESHOLD = "e"
+
     #: Set sync channel and sync mode
     SYNC_CHANNEL_MODE = "K"
 

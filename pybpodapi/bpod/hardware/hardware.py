@@ -23,6 +23,7 @@ class Hardware(object):
 
         self.max_states = None
         self.max_serial_events = None
+        self.serial_message_max_bytes = None
 
         self.inputs_enabled = None
         self.cycle_period = None
@@ -31,6 +32,14 @@ class Hardware(object):
         self.n_global_counters = None
         self.n_conditions = None
         self.n_uart_channels = None
+        self.n_flex_channels = None
+        self.flex_channel_types = None
+
+        self.analog_input_thresholds_1 = None
+        self.analog_input_thresholds_2 = None
+        self.analog_input_threshold_polarity_1 = None
+        self.analog_input_threshold_polarity_2 = None
+        self.analog_input_threshold_mode = None
 
         self.firmware_version = None
         self.machine_type = None
@@ -54,12 +63,10 @@ class Hardware(object):
 
         self.outputs = self.outputs  # + ['G', 'G', 'G']
 
-        self.n_uart_channels = len([idx for idx in self.inputs if idx == "U"])
-
         # set up channels
         self.channels = Channels()  # type: Channels
         self.channels.setup_input_channels(self, modules)
-        self.channels.setup_output_channels(self.outputs, self)
+        self.channels.setup_output_channels(self, modules)
 
         logger.debug(self.channels)
 
@@ -72,6 +79,7 @@ class Hardware(object):
             "Cycle period: {cycle_period}\n"
             "Cycle frequency: {cycle_frequency}\n"
             "Number of events per serial channel: {max_serial_events}\n"
+            "Number of bytes per serial message: {serial_message_max_bytes}\n"
             "Number of global timers: {n_global_timers}\n"
             "Number of global counters: {n_global_counters}\n"
             "Number of conditions: {n_conditions}\n"
@@ -83,6 +91,7 @@ class Hardware(object):
                 cycle_period=self.cycle_period,
                 cycle_frequency=self.cycle_frequency,
                 max_serial_events=self.max_serial_events,
+                serial_message_max_bytes=self.serial_message_max_bytes,
                 n_global_timers=self.n_global_timers,
                 n_global_counters=self.n_global_counters,
                 n_conditions=self.n_conditions,
@@ -119,6 +128,10 @@ class Hardware(object):
     def behavior_inputports_indexes(self):
         return [i for i, input_type in enumerate(self.inputs) if input_type == "P"]
 
+    @property
+    def flex_inputports_indexes(self):
+        return [i for i, input_type in enumerate(self.inputs) if input_type == "F"]
+    
     @property
     def bnc_inputports_names(self):
         return [

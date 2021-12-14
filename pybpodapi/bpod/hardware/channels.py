@@ -25,10 +25,10 @@ class ChannelName(object):
     These values must be set according to Bpod firmware specification.
     """
 
-    #: Analog channel with PWM support (e.g. Led)
+    #: Output channel with PWM support (e.g. Led)
     PWM = "PWM"
 
-    #: Analog channel for connecting a valve
+    #: Output channel for connecting a valve
     VALVE = "Valve"
 
     #: BNC channel
@@ -40,6 +40,9 @@ class ChannelName(object):
     #: Serial channel
     SERIAL = "Serial"
 
+    #: Flex channel
+    FLEX = "Flex"
+
 
 class EventsPositions(object):
     """
@@ -50,7 +53,8 @@ class EventsPositions(object):
         self.Event_USB = 0  # type: int
         self.Event_Port = 0  # type: int
         self.Event_BNC = 0  # type: int
-        self.EventWire = 0  # type: int
+        self.Event_Wire = 0  # type: int
+        self.Event_Flex = 0  # type: int
         self.globalTimerStart = 0  # type: int
         self.globalTimerEnd = 0  # type: int
         self.globalTimerTrigger = 0  # type: int
@@ -64,6 +68,52 @@ class EventsPositions(object):
         self.output_BNC = 0  # type: int
         self.output_Wire = 0  # type: int
         self.output_PWM = 0  # type: int
+        self.output_Flex = 0  # type: int
+
+    def __str__(self):
+        return (
+            "Events Positions\n"
+            "Event_USB: {Event_USB}\n"
+            "Event_Port: {Event_Port}\n"
+            "Event_BNC: {Event_BNC}\n"
+            "Event_Wire {Event_Wire}\n"
+            "Event_Flex: {Event_Flex}\n"
+            "globalTimerStart: {globalTimerStart}\n"
+            "globalTimerEnd: {globalTimerEnd}\n"
+            "globalTimerTrigger: {globalTimerTrigger}\n"
+            "globalTimerCancel: {globalTimerCancel}\n"
+            "globalCounter: {globalCounter}\n"
+            "condition: {condition}\n"
+            "jump: {jump}\n"
+            "Tup: {Tup}\n"
+            "output_USB: {output_USB}\n"
+            "output_VALVE: {output_VALVE}\n"
+            "output_BNC: {output_BNC}\n"
+            "output_Wire: {output_Wire}\n"
+            "output_PWM: {output_PWM}\n"
+            "output_Flex: {output_Flex}\n"
+            "".format(
+               Event_USB=self.Event_USB,
+               Event_Port=self.Event_Port,
+               Event_BNC=self.Event_BNC,
+               Event_Wire=self.Event_Wire,
+               Event_Flex=self.Event_Flex,
+               globalTimerStart=self.globalTimerStart,
+               globalTimerEnd=self.globalTimerEnd,
+               globalTimerTrigger=self.globalTimerTrigger,
+               globalTimerCancel=self.globalTimerCancel,
+               globalCounter=self.globalCounter,
+               condition=self.condition,
+               jump=self.jump,
+               Tup=self.Tup,
+               output_USB=self.output_USB,
+               output_VALVE=self.output_VALVE,
+               output_BNC=self.output_BNC,
+               output_Wire=self.output_Wire,
+               output_PWM=self.output_PWM,
+               output_Flex=self.output_Flex,
+            )
+        )
 
 
 class Channels(object):
@@ -87,10 +137,10 @@ class Channels(object):
         nBNCs = 0
         nWires = 0
         nPorts = 0
+        nFlex = 0
 
         for i in range(len(hardware.inputs)):
             if hardware.inputs[i] == "U":
-
                 nUART += 1
                 module = modules[nUART - 1]
                 module_name = ""
@@ -107,7 +157,6 @@ class Channels(object):
                     if j < n_module_event_names:
                         self.event_names += [module_name + "_" + module.event_names[j]]
                     else:
-
                         self.event_names += [module_name + "_" + str(j + 1)]
                     Pos += 1
 
@@ -120,6 +169,7 @@ class Channels(object):
                 for j in range(loops_n):
                     self.event_names += ["SoftCode" + str(j + 1)]
                     Pos += 1
+            
             elif hardware.inputs[i] == "P":
                 if nPorts == 0:
                     self.events_positions.Event_Port = Pos
@@ -129,6 +179,7 @@ class Channels(object):
                 Pos += 1
                 self.event_names += [self.input_channel_names[-1] + "Out"]
                 Pos += 1
+            
             elif hardware.inputs[i] == "B":
                 if nBNCs == 0:
                     self.events_positions.Event_BNC = Pos
@@ -138,6 +189,7 @@ class Channels(object):
                 Pos += 1
                 self.event_names += [self.input_channel_names[-1] + "Low"]
                 Pos += 1
+            
             elif hardware.inputs[i] == "W":
                 if nWires == 0:
                     self.events_positions.Event_Wire = Pos
@@ -147,6 +199,32 @@ class Channels(object):
                 Pos += 1
                 self.event_names += [self.input_channel_names[-1] + "Low"]
                 Pos += 1
+            
+            elif hardware.inputs[i] == "F":
+                if nFlex == 0:
+                    self.events_positions.Event_Flex = Pos
+                
+                # Check if channel is configured for digital input
+                if hardware.flex_channel_types[nFlex] == 0:
+                    nFlex += 1
+                    self.input_channel_names += ["Flex" + str(nFlex)]
+                    self.event_names += [self.input_channel_names[-1] + "High"]
+                    Pos += 1
+                    self.event_names += [self.input_channel_names[-1] + "Low"]
+                    Pos += 1
+                
+                # Check if channel is configured for analog input
+                elif hardware.flex_channel_types[nFlex] == 2:
+                    nFlex += 1
+                    self.input_channel_names += ["Flex" + str(nFlex)]
+                    self.event_names += [self.input_channel_names[-1] + "Trig1"]
+                    Pos += 1
+                    self.event_names += [self.input_channel_names[-1] + "Trig2"]
+                    Pos += 1
+
+                # This means the flex channel must be configured as output
+                else:
+                    nFlex += 1  # increment to maintain flex_channel_types index
 
         self.events_positions.globalTimerStart = Pos
         for i in range(hardware.n_global_timers):
@@ -176,7 +254,7 @@ class Channels(object):
         logger.debug("event_names: %s", self.event_names)
         logger.debug("events_positions: %s", self.events_positions)
 
-    def setup_output_channels(self, hw_outputs, hardware):
+    def setup_output_channels(self, hardware, modules):
         """
         Generate output channel names
         """
@@ -186,48 +264,67 @@ class Channels(object):
         nBNCs = 0
         nWires = 0
         nPorts = 0
-        for i in range(len(hw_outputs)):
-            if hw_outputs[i] == "U":
-                nUART += 1
-                self.output_channel_names += ["Serial" + str(nUART)]
+        nFlex = 0
 
-            if hw_outputs[i] == "X":
+        for i in range(len(hardware.outputs)):
+            if hardware.outputs[i] == "U":
+                nUART += 1
+                module = modules[nUART - 1]
+                module_name = ""
+                if module.connected:
+                    module_name = module.name
+                    self.output_channel_names += [module_name]
+                else:
+                    module_name = "Serial" + str(nUART)
+                    self.output_channel_names += [module_name]
+
+            elif hardware.outputs[i] == "X":
                 if nUSB == 0:
                     self.events_positions.output_USB = len(self.output_channel_names)
                 nUSB += 1
                 self.output_channel_names += ["SoftCode"]
 
-            if hw_outputs[i] == "V":
+            elif hardware.outputs[i] == "V":
                 if nVALVE == 0:
                     self.events_positions.output_VALVE = len(self.output_channel_names)
                 nVALVE += 1
-                self.output_channel_names += [
-                    "Valve" + str(nVALVE)
-                ]  # Assume an SPI shift register mapping bits of a byte to 8 valves
+                self.output_channel_names += ["Valve" + str(nVALVE)]  # Assume an SPI shift register mapping bits of a byte to 8 valves
 
-            if hw_outputs[i] == "B":
+            elif hardware.outputs[i] == "B":
                 if nBNCs == 0:
                     self.events_positions.output_BNC = len(self.output_channel_names)
                 nBNCs += 1
-                self.output_channel_names += [
-                    "BNC" + str(nBNCs)
-                ]  # Assume an SPI shift register mapping bits of a byte to 8 valves
+                self.output_channel_names += ["BNC" + str(nBNCs)]
 
-            if hw_outputs[i] == "W":
+            elif hardware.outputs[i] == "W":
                 if nWires == 0:
                     self.events_positions.output_Wire = len(self.output_channel_names)
                 nWires += 1
-                self.output_channel_names += [
-                    "Wire" + str(nWires)
-                ]  # Assume an SPI shift register mapping bits of a byte to 8 valves
+                self.output_channel_names += ["Wire" + str(nWires)]
 
-            if hw_outputs[i] == "P":
+            elif hardware.outputs[i] == "P":
                 if nPorts == 0:
                     self.events_positions.output_PWM = len(self.output_channel_names)
                 nPorts += 1
-                self.output_channel_names += [
-                    "PWM" + str(nPorts)
-                ]  # Assume an SPI shift register mapping bits of a byte to 8 valves
+                self.output_channel_names += ["PWM" + str(nPorts)]
+            
+            elif hardware.outputs[i] == "F":
+                if nFlex == 0:
+                    self.events_positions.output_Flex = len(self.output_channel_names)
+                
+                # Check if channel is configured for digital output
+                if hardware.flex_channel_types[nFlex] == 1:
+                    nFlex += 1
+                    self.output_channel_names += ["Flex" + str(nFlex) + "DO"]
+                
+                # Check if channel is configured for analog output
+                elif hardware.flex_channel_types[nFlex] == 3:
+                    nFlex += 1
+                    self.output_channel_names += ["Flex" + str(nFlex) + "AO"]
+
+                # This means the flex channel must be configured as input
+                else:
+                    nFlex += 1  # increment to maintain the flex_channel_types index
 
         self.output_channel_names += ["GlobalTimerTrig"]
         self.events_positions.globalTimerTrigger = len(self.output_channel_names) - 1
@@ -236,6 +333,7 @@ class Channels(object):
         self.output_channel_names += ["GlobalCounterReset"]
 
         logger.debug("output_channel_names: %s", self.output_channel_names)
+        logger.debug("events_positions: %s", self.events_positions)
 
     def get_event_name(self, event_idx):
         """

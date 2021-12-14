@@ -210,6 +210,12 @@ class BpodCOMProtocol(BpodBase):
         max_serial_events = self._arcom.read_uint8()  # type: int
         logger.debug("Read number of events per serial channel: %s", max_serial_events)
 
+        if hardware.firmware_version > 22:
+            serial_message_max_bytes = self._arcom.read_uint8()  # type: int
+            logger.debug("Read max number of bytes allowed per serial message: %s", serial_message_max_bytes)
+        else:
+            serial_message_max_bytes = 3
+        
         n_global_timers = self._arcom.read_uint8()  # type: int
         logger.debug("Read number of global timers: %s", n_global_timers)
 
@@ -234,11 +240,15 @@ class BpodCOMProtocol(BpodBase):
         hardware.max_states = max_states
         hardware.cycle_period = cycle_period
         hardware.max_serial_events = max_serial_events
+        hardware.serial_message_max_bytes = serial_message_max_bytes
         hardware.n_global_timers = n_global_timers
         hardware.n_global_counters = n_global_counters
         hardware.n_conditions = n_conditions
         hardware.inputs = inputs
         hardware.outputs = outputs  # + ['G', 'G', 'G']
+
+        hardware.n_uart_channels = len([idx for idx in inputs if idx == "U"])
+        hardware.n_flex_channels = len([idx for idx in inputs if idx == "F"])
 
         hardware.live_timestamps = self._bpodcom_get_timestamp_transmission()
 
@@ -261,6 +271,9 @@ class BpodCOMProtocol(BpodBase):
 
         for j, i in enumerate(hardware.behavior_inputports_indexes):
             hardware.inputs_enabled[i] = settings.BPOD_BEHAVIOR_PORTS_ENABLED[j]
+        
+        for j, i in enumerate(hardware.flex_inputports_indexes):
+            hardware.inputs_enabled[i] = settings.BPOD_FLEX_PORTS_ENABLED[j]
         #############################################################################################
 
         logger.debug("Requesting ports enabling (%s)", SendMessageHeader.ENABLE_PORTS)
@@ -275,7 +288,7 @@ class BpodCOMProtocol(BpodBase):
         logger.debug("Response: %s", response)
 
         return True if response == ReceiveMessageHeader.ENABLE_PORTS_OK else False
-
+    
     def _bpodcom_set_sync_channel_and_mode(self, sync_channel, sync_mode):
         """
         Request sync channel and sync mode configuration
@@ -464,7 +477,7 @@ class BpodCOMProtocol(BpodBase):
         v = self._arcom.read_uint32()
         return float(v) * self.hardware.times_scale_factor
 
-    def _bpodcom_load_serial_message(self, serial_channel, message_id, serial_message, n_messages):
+    def _bpodcom_load_serial_message(self, serial_channel, message_id, serial_message, n_messages, max_bytes):
         """
         Load serial message on channel
 
@@ -478,8 +491,8 @@ class BpodCOMProtocol(BpodBase):
 
         self.msg_id_list[message_id] = True
 
-        if len(serial_message) > 3:
-            raise BpodErrorException('Error: Serial messages cannot be more than 3 bytes in length.')
+        if len(serial_message) > max_bytes:
+            raise BpodErrorException("Error: Serial messages cannot be more than {0} bytes in length.".format(max_bytes))
 
         if not (1 <= message_id <= 255):
             raise BpodErrorException('Error: Bpod can only store 255 serial messages (indexed 1-255). You used the message_id {0}'.format(message_id))
@@ -539,6 +552,115 @@ class BpodCOMProtocol(BpodBase):
         )
         self._arcom.write_array(bytes2send)
 
+    def _bpodcom_set_flex_channel_types(self, channel_types):
+        """
+        Configure channel types for Flex channels on Bpod r2+ (machine_type 4).
+        
+        :param list[int] channel_types: Channel types are: 0 = DI, 1 = DO, 2 = ADC, 3 = DAC
+        :rtype: bool
+        """
+
+        logger.debug("Setting Flex channel types (%s)", SendMessageHeader.SET_FLEX_CHANNEL_TYPES)
+        bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_FLEX_CHANNEL_TYPES)] + channel_types)
+        self._arcom.write_array(bytes2send)
+
+        response = self._arcom.read_uint8()
+        logger.debug("Response: %s", response)
+
+        return (response == ReceiveMessageHeader.SET_FLEX_CHANNEL_TYPES_OK)
+
+    def _bpodcom_get_flex_channel_types(self, n_flex_channels):
+        """
+        Read the current Flex channel types from the Bpod r2+ (machine_type 4)
+        :rtype: list[int]
+        """
+
+        logger.debug("Requesting current flex channel types (%s)", SendMessageHeader.GET_FLEX_CHANNEL_TYPES)
+        self._arcom.write_char(SendMessageHeader.GET_FLEX_CHANNEL_TYPES)
+        
+        flex_channel_types = self._arcom.read_uint8_array(n_flex_channels)
+        logger.debug("Read current Flex channel types: %s", flex_channel_types)
+        
+        return flex_channel_types
+    
+    def _bpodcom_set_analog_input_thresholds(self, thresholds_1, thresholds_2):
+        """
+        Set the analog input thresholds for all flex channels (regardless of whether they are currently configured as analog inputs).
+        Each analog input channel has two thresholds that can each be set by the user. Compatible only with Bpod r2+ (machine type 4).
+
+        :param list[int] thresholds_1: List of the first threshold values for each channel. Units are bits ranging from 0 to 4095.
+        :param list[int] thresholds_2: List of the second threshold values for each channel. Units are bits ranging from 0 to 4095.
+        :rtype bool
+        """
+        bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_THRESHOLDS)])
+        bytes2send += ArduinoTypes.get_uint16_array(thresholds_1 + thresholds_2)
+        
+        logger.debug("Setting analog input thresholds (%s)", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLDS)
+        self._arcom.write_array(bytes2send)
+
+        response = self._arcom.read_uint8()  # type: int
+        logger.debug("Response: %s", response)
+
+        return (response == ReceiveMessageHeader.SET_ANALOG_INPUT_THRESHOLDS_OK)
+
+    def _bpodcom_set_analog_input_threshold_polarity(self, polarity_1, polarity_2):
+        """
+        Set the analog input threshold polarity for both thresholds on all flex channels. Compatible only with Bpod r2+ (machine type 4).
+        Polarity of 0 indicates to trigger once the analog input value becomes greater than the threshold.
+        Polarity of 1 indicates to trigger once the analog input value becomes less than the threshold.
+
+        :param list[int] polarity_1: List of polarities of the first threshold for each channel. Value is 0 or 1.
+        :param list[int] polarity_2: List of polarities of the second threshold for each channel. Value is 0 or 1.
+        :rtype bool
+        """
+        bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_POLARITY)] + polarity_1 + polarity_2)
+        
+        logger.debug("Setting analog input threshold polarity (%s)", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_POLARITY)
+        self._arcom.write_array(bytes2send)
+
+        response = self._arcom.read_uint8()  # type: int
+        logger.debug("Response: %s", response)
+
+        return (response == ReceiveMessageHeader.SET_ANALOG_INPUT_THRESHOLD_POLARITY_OK)
+
+    def _bpodcom_set_analog_input_threshold_mode(self, modes):
+        """
+        Set the analog input threshold mode for all flex channels. Compatible only with Bpod r2+ (machine type 4).
+        When mode is set to 0, each threshold for that channel becomes disabled once it is triggered and must be re-enabled by the state machine.
+        When mode is set to 1, each threshold for that channel re-enables the other threshold before becoming disabled itself once it is triggered.
+
+        :param list[int] modes: List of modes for each channel. Value is 0 or 1.
+        :rtype bool
+        """
+        bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_MODE)] + modes)
+        
+        logger.debug("Setting analog input threshold mode (%s)", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_MODE)
+        self._arcom.write_array(bytes2send)
+
+        response = self._arcom.read_uint8()  # type: int
+        logger.debug("Response: %s", response)
+
+        return (response == ReceiveMessageHeader.SET_ANALOG_INPUT_THRESHOLD_MODE_OK)
+
+    def _bpodcom_enable_analog_input_threshold(self, channel, threshold, value):
+        """
+        Enable an analog input threshold for a given flex channel. Compatible only with Bpod r2+ (machine type 4).
+
+        :param int channel: Index of flex channel (0 - 3).
+        :param int threshold: Index of threshold (0 or 1).
+        :param int value: Disabled = 0, Enabled = 1.
+        :rtype bool
+        """
+        bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD), channel, threshold, value])
+
+        logger.debug("Enabling analog input threshold (%s)", SendMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD)
+        self._arcom.write_array(bytes2send)
+
+        response = self._arcom.read_uint8()  # type: int
+        logger.debug("Response: %s", response)
+
+        return (response == ReceiveMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD_OK)
+    
     @property
     def hardware(self):
         # self.__bpodcom_check_com_ready()

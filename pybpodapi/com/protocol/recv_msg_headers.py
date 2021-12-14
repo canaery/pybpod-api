@@ -19,6 +19,21 @@ class ReceiveMessageHeader(object):
     #: Success code from ENABLE_PORTS command
     ENABLE_PORTS_OK = 1
 
+    #: Success code from SET_FLEX_CHANNEL_TYPES command
+    SET_FLEX_CHANNEL_TYPES_OK = 1
+    
+    #: Success code from SET_ANALOG_INPUT_THRESHOLDS command
+    SET_ANALOG_INPUT_THRESHOLDS_OK = 1
+
+    #: Success code from SET_ANALOG_INPUT_THRESHOLD_POLARITY command
+    SET_ANALOG_INPUT_THRESHOLD_POLARITY_OK = 1
+
+    #: Success code from SET_ANALOG_INPUT_THRESHOLD_MODE command
+    SET_ANALOG_INPUT_THRESHOLD_MODE_OK = 1
+
+    #: Success code from ENABLE_ANALOG_INPUT_THRESHOLD command
+    ENABLE_ANALOG_INPUT_THRESHOLD_OK = 1
+
     #: Success code from SYNC_CHANNEL_MODE command
     SYNC_CHANNEL_MODE_OK = 1
 
