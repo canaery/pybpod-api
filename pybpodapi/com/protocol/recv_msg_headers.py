@@ -12,9 +12,21 @@ class ReceiveMessageHeader(object):
 
     The message header is the first byte (character) on a message received.
     """
+    
+    #: Bpod writes 0xDE every 100ms on its primary COM port.
+    #: 0xDE in decimal is 222 which refers to firmware version 22.
+    PRIMARY_PORT_PING = 222
 
     #: Success code from HANDSHAKE command
     HANDSHAKE_OK = "5"
+
+    #: Handshake response on the secondary serial port after sending
+    #: the SECONDARY_PORT_HANDSHAKE command on the primary serial port.
+    SECONDARY_PORT_HANDSHAKE_OK = 222
+
+    #: Handshake response on the analog serial port after sending
+    #: the ANALOG_PORT_HANDSHAKE command on the primary serial port.
+    ANALOG_PORT_HANDSHAKE_OK = 223
 
     #: Success code from ENABLE_PORTS command
     ENABLE_PORTS_OK = 1
@@ -46,8 +58,14 @@ class ReceiveMessageHeader(object):
     #: Success code from RESET_SERIAL_MESSAGES command
     RESET_SERIAL_MESSAGES = 1
 
+    #: Success code from RESET_CLOCK command
+    RESET_CLOCK_OK = 1
+    
     #: Module requested event
     MODULE_REQUESTED_EVENT = ord("#")
 
     #: Module events names
     MODULE_EVENT_NAMES = ord("E")
+
+    #: Success code from DISCONNECT command
+    DISCONNECT_OK = "1"

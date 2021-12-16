@@ -16,6 +16,12 @@ class SendMessageHeader(object):
     #: Request initialization handshake
     HANDSHAKE = "6"
 
+    #: Handshake byte used to identify secondary serial port on Bpod r2+.
+    SECONDARY_PORT_HANDSHAKE = "{"
+
+    #: Handshake byte used to identify analog serial port on Bpod r2+.
+    ANALOG_PORT_HANDSHAKE = "}"
+
     #: Request firmware build number
     FIRMWARE_VERSION = "F"
 

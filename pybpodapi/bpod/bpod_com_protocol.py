@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+from serial.serialutil import SerialException
 
 from confapp import conf as settings
 from pybpodapi.bpod.bpod_base import BpodBase
@@ -34,12 +35,26 @@ class BpodCOMProtocol(BpodBase):
         super(BpodCOMProtocol, self).__init__(serial_port, sync_channel, sync_mode)
 
         self._arcom = None  # type: ArCOM
+        self._arcom_secondary = None  # type: ArCOM
+        self._arcom_analog = None  # type: ArCOM
         self.bpod_com_ready = False
 
         # used to keep the list of msg ids sent using the load_serial_message function
         self.msg_id_list = [False for i in range(255)]
 
         if self.serial_port:
+            # When self.serial_port is given (either in the settings file or during Bpod object init),
+            # assume that the Bpod being used precedes version r2+ (i.e. machine_type < 4, AKA with only one USB serial port).
+            self.open()
+        else:
+            # When no serial port is given (either in the settings file or during Bpod object init),
+            # assume that the Bpod being used is version r2+ (i.e. machine_type == 4, AKA with three USB serial ports).
+            # So it is necessary to identify its three serial ports since the user will not know.
+            logger.info("No serial port provided. Searching ports manually...")
+            primary_port, secondary_port, analog_port = self._bpodcom_identify_USB_serial_ports()
+            self.serial_port = primary_port
+            self.secondary_serial_port = secondary_port
+            self.analog_serial_port = analog_port
             self.open()
 
     def open(self):
@@ -50,6 +65,10 @@ class BpodCOMProtocol(BpodBase):
         if self.bpod_com_ready:
             super(BpodCOMProtocol, self).close()
             self._arcom.close()
+            if self._arcom_secondary is not None:
+                self._arcom_secondary.close()
+            if self._arcom_analog is not None:
+                self._arcom_analog.close()
             self.bpod_com_ready = False
 
     def manual_override(self, channel_type, channel_name, channel_number, value):
@@ -85,16 +104,26 @@ class BpodCOMProtocol(BpodBase):
         else:
             raise BpodErrorException('Error using manualOverride: first argument must be "Input" or "Output".')
 
-    def _bpodcom_connect(self, serial_port, baudrate=115200, timeout=1):
+    def _bpodcom_connect(self, serial_port, secondary_port=None, analog_port=None, baudrate=115200, timeout=1):
         """
         Connect to Bpod using serial connection
 
         :param str serial_port: serial port to connect
+        :param str secondary_port [optional]: secondary serial port on Bpod version r2+ (machine type 4)
+        :param str analog_port [optional]: analog serial port on Bpod version r2+ (machine type 4)
         :param int baudrate: baudrate for serial connection
         :param float timeout: timeout which controls the behavior of read()
         """
         logger.debug("Connecting on port: %s", serial_port)
         self._arcom = ArCOM().open(serial_port, baudrate, timeout)
+
+        if secondary_port:
+            logger.debug("Connecting to secondary port on %s", secondary_port)
+            self._arcom_secondary = ArCOM().open(secondary_port, baudrate, timeout)
+
+        if analog_port:
+            logger.debug("Connecting to analog port on %s", analog_port)
+            self._arcom_analog = ArCOM().open(analog_port, baudrate, timeout)
 
     def _bpodcom_disconnect(self):
         """
@@ -104,9 +133,9 @@ class BpodCOMProtocol(BpodBase):
 
         self._arcom.write_char(SendMessageHeader.DISCONNECT)
 
-        res = self._arcom.read_byte() == b'1'
+        res = self._arcom.read_char() == ReceiveMessageHeader.DISCONNECT_OK
 
-        logger.debug("Disconnect result (%s)", str(res))
+        logger.debug("Disconnect result (%s)", res)
         return res
 
     # def __bpodcom_check_com_ready(self):
@@ -121,15 +150,47 @@ class BpodCOMProtocol(BpodBase):
         """
 
         logger.debug("Requesting handshake (%s)", SendMessageHeader.HANDSHAKE)
-
         self._arcom.write_char(SendMessageHeader.HANDSHAKE)
 
         response = self._arcom.read_char()  # Receive response
-
         logger.debug("Response command is: %s", response)
 
-        return True if response == ReceiveMessageHeader.HANDSHAKE_OK else False
+        return response == ReceiveMessageHeader.HANDSHAKE_OK
 
+    def _bpodcom_handshake_secondary(self):
+        """
+        Test connectivity of the secondary serial port by doing a handshake.
+        Only compatible with Bpod r2+ (machine_type == 4).
+
+        :return: True if handshake received, False otherwise
+        :rtype: bool
+        """
+        
+        logger.debug("Requesting handshake for secondary serial port (%s)", SendMessageHeader.SECONDARY_PORT_HANDSHAKE)
+        self._arcom.write_char(SendMessageHeader.SECONDARY_PORT_HANDSHAKE)  # Send from the primary serial port.
+
+        response = self._arcom_secondary.read_uint8()  # Read from the secondary serial port.
+        logger.debug("Response: %s", response)
+
+        return response == ReceiveMessageHeader.SECONDARY_PORT_HANDSHAKE_OK
+    
+    def _bpodcom_handshake_analog(self):
+        """
+        Test connectivity of the analog serial port by doing a handshake.
+        Only compatible with Bpod r2+ (machine_type == 4).
+
+        :return: True if handshake received, False otherwise
+        :rtype: bool
+        """
+        
+        logger.debug("Requesting handshake for analog serial port (%s)", SendMessageHeader.ANALOG_PORT_HANDSHAKE)
+        self._arcom.write_char(SendMessageHeader.ANALOG_PORT_HANDSHAKE)  # Send from the primary serial port.
+
+        response = self._arcom_analog.read_uint8()  # Read from the analog serial port.
+        logger.debug("Response: %s", response)
+
+        return response == ReceiveMessageHeader.ANALOG_PORT_HANDSHAKE_OK
+    
     def _bpodcom_firmware_version(self):
         """
         Request firmware and machine type from Bpod
@@ -157,7 +218,7 @@ class BpodCOMProtocol(BpodBase):
         logger.debug("Resetting clock")
 
         self._arcom.write_char(SendMessageHeader.RESET_CLOCK)
-        return self._arcom.read_byte() == bytes(1)
+        return self._arcom.read_uint8() == ReceiveMessageHeader.RESET_CLOCK_OK
 
     def _bpodcom_stop_trial(self):
         """
@@ -287,7 +348,7 @@ class BpodCOMProtocol(BpodBase):
 
         logger.debug("Response: %s", response)
 
-        return True if response == ReceiveMessageHeader.ENABLE_PORTS_OK else False
+        return response == ReceiveMessageHeader.ENABLE_PORTS_OK
     
     def _bpodcom_set_sync_channel_and_mode(self, sync_channel, sync_mode):
         """
@@ -308,7 +369,7 @@ class BpodCOMProtocol(BpodBase):
 
         logger.debug("Response: %s", response)
 
-        return True if response == ReceiveMessageHeader.SYNC_CHANNEL_MODE_OK else False
+        return response == ReceiveMessageHeader.SYNC_CHANNEL_MODE_OK
 
     def _bpodcom_echo_softcode(self, softcode):
         """
@@ -417,7 +478,7 @@ class BpodCOMProtocol(BpodBase):
 
         logger.debug("Read state machine installation status: %s", response)
 
-        return True if response == ReceiveMessageHeader.STATE_MACHINE_INSTALLATION_STATUS else False
+        return response == ReceiveMessageHeader.STATE_MACHINE_INSTALLATION_STATUS
 
     def data_available(self):
         """
@@ -510,7 +571,7 @@ class BpodCOMProtocol(BpodBase):
 
         logger.debug("Confirmation: %s", response)
 
-        return True if response == ReceiveMessageHeader.LOAD_SERIAL_MESSAGE_OK else False
+        return response == ReceiveMessageHeader.LOAD_SERIAL_MESSAGE_OK
 
     def _bpodcom_reset_serial_messages(self):
         """
@@ -526,7 +587,7 @@ class BpodCOMProtocol(BpodBase):
 
         logger.debug("Confirmation: %s", response)
 
-        return True if response == ReceiveMessageHeader.RESET_SERIAL_MESSAGES else False
+        return response == ReceiveMessageHeader.RESET_SERIAL_MESSAGES
 
     def _bpodcom_override_digital_hardware_state(self, channel_number, value):
         """
@@ -660,6 +721,86 @@ class BpodCOMProtocol(BpodBase):
         logger.debug("Response: %s", response)
 
         return (response == ReceiveMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD_OK)
+    
+    def _bpodcom_identify_USB_serial_ports(self):
+        """
+        Identify the Bpod r2+ (machine_type == 4) primary, secondary, and analog serial ports.
+        The Bpod r2+ creates 3 separate USB serial ports on the PC. The first handles everything that the single port handled previously.
+        The second is available for a second application to send event bytes to the state machine (e.g. Bonsai, running on the same PC).
+        The third port is dedicated for receiving analog data. For the auto-identification routine, open the COM ports and listen for bytes.
+        The primary port will send '222' every 100ms (as in firmware v22). Once the primary port is found, open the remaining ports and
+        send '{' to the primary port. The secondary application port will respond with '222'. Open the remaining port(s) and send '}' to
+        the primary port to receive '223' from the analog input port.
+
+        :rtype: three-tuple
+        :return: primary port, secondary port, analog port
+        """
+        available_ports = ArCOM.list_ports()
+        logger.debug("Available USB serial ports: %s", available_ports)
+
+        primary_port = None
+        secondary_port = None
+        analog_port = None
+        bad_ports = []
+        
+        if not self.serial_port:
+            # This means that no serial port was given during Bpod object init, nor in the settings file. So try to find it.
+            for port in available_ports:
+                try:
+                    logger.debug("Testing primary port using: %s", port)
+                    test_connect = ArCOM().open(serial_port=port, baudrate=self.baudrate, timeout=1)
+                    reading = test_connect.read_uint8()
+                    if (reading == ReceiveMessageHeader.PRIMARY_PORT_PING):  # Bpod writes 0xDE every 100ms on its primary COM port. 0xDE in decimal is 222 which refers to firmware version 22.
+                        logger.debug("Primary port is: %s", port)
+                        primary_port = port
+                        test_connect.close()
+                        break
+                    else:
+                        logger.debug("Nothing received from port: %s", port)
+                        test_connect.close()
+
+                except SerialException:
+                    logger.debug("Bad port: %s", port)
+                    bad_ports.append(port)
+        else:
+            primary_port = self.serial_port  # This means that a serial port was given either during Bpod object init or in the settings file. So use it.
+        
+        if primary_port:  # Check if it was found from the previous for loop.
+            available_ports.remove(primary_port)  # remove from available ports to avoid testing it again.
+            for port in bad_ports:
+                available_ports.remove(port)
+            
+            primary_connection = ArCOM().open(serial_port=primary_port, baudrate=self.baudrate, timeout=1)
+            for port in available_ports:
+                try:
+                    if not secondary_port or not analog_port:
+                        logger.debug("Testing secondary and analog ports using: %s", port)
+                        test_connect = ArCOM().open(serial_port=port, baudrate=self.baudrate, timeout=1)
+                        primary_connection.write_char(SendMessageHeader.SECONDARY_PORT_HANDSHAKE)  # Send handshake byte for both the secondary serial port
+                        primary_connection.write_char(SendMessageHeader.ANALOG_PORT_HANDSHAKE)     # and the analog serial port.
+                        
+                        response = test_connect.read_uint8()  # The response will determine whether the current port is the secondary or analog serial port.
+                        if (response == ReceiveMessageHeader.SECONDARY_PORT_HANDSHAKE_OK):
+                            logger.debug("Secondary port is: %s", port)
+                            secondary_port = port
+                            test_connect.close()
+                        elif (response == ReceiveMessageHeader.ANALOG_PORT_HANDSHAKE_OK):
+                            logger.debug("Analog port is: %s", port)
+                            analog_port = port
+                            test_connect.close()
+                        else:
+                            logger.debug("Nothing received from port: %s", port)
+                            test_connect.close()
+                    else:
+                        break  # Break out of for loop once both the secondary and analog ports were found.
+
+                except SerialException:
+                    logger.debug("Bad port: %s", port)
+                    bad_ports.append(port)
+
+            primary_connection.close()
+            
+        return primary_port, secondary_port, analog_port
     
     @property
     def hardware(self):

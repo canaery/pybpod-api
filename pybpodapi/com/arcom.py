@@ -3,6 +3,7 @@
 
 import logging
 import serial
+import serial.tools.list_ports
 import numpy as np
 import struct
 
@@ -86,6 +87,16 @@ class ArCOM(object):
     ArCOM is an interface to simplify data transactions between Arduino and Python.
     """
 
+    @staticmethod
+    def list_ports():
+        """
+        Get a list of available serial ports.
+
+        :rtype: list[str]
+        :return: List of available serial ports.
+        """
+        return [comport.device for comport in serial.tools.list_ports.comports()]
+    
     def open(self, serial_port, baudrate=115200, timeout=1):
         """
         Open serial connection

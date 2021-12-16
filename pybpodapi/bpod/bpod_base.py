@@ -63,6 +63,8 @@ class BpodBase(object):
         self._session = self.create_session()
 
         self.serial_port = serial_port if serial_port is not None else settings.PYBPOD_SERIAL_PORT
+        self.secondary_serial_port = None
+        self.analog_serial_port = None
         self.baudrate = settings.PYBPOD_BAUDRATE
         self.sync_channel = sync_channel if sync_channel is not None else settings.PYBPOD_SYNC_CHANNEL
         self.sync_mode = sync_mode if sync_mode is not None else settings.PYBPOD_SYNC_MODE
@@ -129,10 +131,12 @@ class BpodBase(object):
         :rtype: pybpodapi.model.bpod
         """
 
+        if not self.serial_port:
+            raise BpodErrorException("Error: Bpod primary USB serial port could not be found.")
+        
         logger.info("Starting Bpod")
-
-        self._bpodcom_connect(self.serial_port, self.baudrate)
-
+        self._bpodcom_connect(self.serial_port, self.secondary_serial_port, self.analog_serial_port, self.baudrate)
+        
         if not self._bpodcom_handshake():
             raise BpodErrorException('Error: Bpod failed to confirm connectivity. Please reset Bpod and try again.')
 
@@ -163,6 +167,12 @@ class BpodBase(object):
 
         if machine_type > 3:
             self._hardware.flex_channel_types = self._bpodcom_get_flex_channel_types(self._hardware.n_flex_channels)
+            
+            if not self._bpodcom_handshake_secondary():
+                raise BpodErrorException('Error: Bpod r2+ secondary serial port failed to confirm connectivity. Please reset Bpod and try again.')
+
+            if not self._bpodcom_handshake_analog():
+                raise BpodErrorException('Error: Bpod r2+ analog serial port failed to confirm connectivity. Please reset Bpod and try again.')
         
         self._hardware.setup(self.bpod_modules)
 
@@ -549,7 +559,6 @@ class BpodBase(object):
             
         else:
             raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
-            
 
 
     #########################################
