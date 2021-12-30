@@ -46,6 +46,9 @@ class SendMessageHeader(object):
     #: Request current Flex channel types
     GET_FLEX_CHANNEL_TYPES = "q"
 
+    #: Set the sampling interval for all flex channels configured as analog input.
+    SET_ANALOG_INPUT_SAMPLING_INTERVAL = "^"
+    
     #: Set the analog input thresholds for all Flex channels, regardless of whether they are currently configured as analog inputs.
     SET_ANALOG_INPUT_THRESHOLDS = "t"
 

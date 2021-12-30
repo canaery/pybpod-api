@@ -167,6 +167,13 @@ class BpodBase(object):
 
         if machine_type > 3:
             self._hardware.flex_channel_types = self._bpodcom_get_flex_channel_types(self._hardware.n_flex_channels)
+            self._hardware.analog_input_channels = [i for i in range(self._hardware.n_flex_channels) if self._hardware.flex_channel_types[i] == 2]  # Find the analog input channel indices.
+
+            # This resets the trial number (that is sent with each sample when reading analog input data) to 1. This is necessary on Bpod r2+
+            # because the trial number does not reset automatically when programmatically closing the Bpod and then opening it again. It only
+            # resets automatically when disconnecting the power and then reconnecting again.
+            if not self._bpodcom_reset_clock():
+                raise BpodErrorException('Error: Bpod r2+ failed to reset clock for initializing behavior session. Please reset Bpod and try again.')
             
             if not self._bpodcom_handshake_secondary():
                 raise BpodErrorException('Error: Bpod r2+ secondary serial port failed to confirm connectivity. Please reset Bpod and try again.')
@@ -245,9 +252,39 @@ class BpodBase(object):
 
         sma.update_state_numbers()
 
-        state_machine_body = sma.build_message() + sma.build_message_global_timer() + sma.build_message_32_bits()
+        if self._hardware.firmware_version > 22:
+            # Package additional ops with state machine description.
+            state_machine_body = sma.build_message() + sma.build_message_global_timer() + sma.build_message_32_bits() + sma.build_message_additional_ops()
+        else:
+            state_machine_body = sma.build_message() + sma.build_message_global_timer() + sma.build_message_32_bits()
 
-        self._bpodcom_send_state_machine(sma.build_header(run_asap, len(state_machine_body)) + state_machine_body)
+        if sma.is_running:  # If sending during a trial
+            if (sma.serial_message_mode == 0) or (self._hardware.firmware_version > 22):
+                if self._hardware.machine_type >= 3:
+                    self._bpodcom_send_state_machine(sma.build_header(run_asap, len(state_machine_body)) + state_machine_body)
+                else:
+                    raise BpodErrorException("Error: This Bpod does not support sending a state machine while a trial is in progress.")
+            else:
+                raise BpodErrorException(
+                    "Error: Firmware version 22 and under do not support implicit serial messages in the state machine descriptions, "
+                    "e.g. ('MyModule1', ['A', 1, 2]). Instead, use the load_serial_message() function to program serial messages "
+                    "explicitly, or upgrade Bpod to firmware version 23."
+                )
+        else:
+            if (self._hardware.firmware_version > 22):
+                self._bpodcom_send_state_machine(sma.build_header(run_asap, len(state_machine_body)) + state_machine_body)
+            else:    
+                if (sma.serial_message_mode == 0):
+                    self._bpodcom_send_state_machine(sma.build_header(run_asap, len(state_machine_body)) + state_machine_body)
+                else:    
+                    # If serial message library was updated due to implicit programming in state machine description,
+                    # current firmware returns an acknowledgement byte which must be read here to avoid conflicts with
+                    # subsequent commands.
+                    raise BpodErrorException(
+                        "Error: Firmware version 22 and under do not support implicit serial messages in the state machine descriptions, "
+                        "e.g. ('MyModule1', ['A', 1, 2]). Instead, use the load_serial_message() function to program serial messages "
+                        "explicitly, or upgrade Bpod to firmware version 23."
+                    )
 
         self._new_sma_sent = True
 
@@ -457,6 +494,9 @@ class BpodBase(object):
         :param list[int] channel_types: Channel types are: 0 = DI, 1 = DO, 2 = ADC, 3 = DAC
         """
         if self._hardware.machine_type > 3:
+            if not len(channel_types) == self._hardware.n_flex_channels:
+                raise BpodErrorException("Error: Must provide a channel type for all %s flex channels.", self._hardware.n_flex_channels)
+            
             for val in channel_types:
                 if (val < 0) or (val > 3):
                     raise BpodErrorException("Error: Invalid flex channel type given. Must be between 0 and 3.")
@@ -465,8 +505,27 @@ class BpodBase(object):
                 raise BpodErrorException("Error: Failed to set flex channel types.")
 
             self._hardware.flex_channel_types = channel_types
+            self._hardware.analog_input_channels = [i for i in range(len(channel_types)) if channel_types[i] == 2]  # Find analog input channel indices.
             self._hardware.setup(self.bpod_modules)  # Must rename inputs and outputs to reflect new flex channel types
         
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+    
+    def set_analog_input_sampling_interval(self, sampling_interval):
+        """
+        Set the sampling interval for all flex channels configured as analog input. Compatible only with Bpod r2+ (machine type 4).
+        
+        Example: If the Bpod's state machine timer period is 100 microseconds (as is the case with the Bpod r2+) and the sampling_interval
+        parameter is given a value of 10 cycles, then the analog input channels will be sampled once every 10 clock cycles of the state machine
+        timer, resulting in a sampling frequency of ( 1 / (100 us/cycle * 10 cycles) ) = 1000 Hz.
+
+        :param int sampling_interval: Interval at which to sample analog input flex channels. Units are state machine clock cycles.
+        """
+        if self._hardware.machine_type > 3:
+            if not self._bpodcom_set_analog_input_sampling_interval(sampling_interval):
+                raise BpodErrorException("Error: Failed to set analog input sampling interval.")
+            
+            self._hardware.analog_input_sampling_interval = sampling_interval
         else:
             raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
     
@@ -554,9 +613,26 @@ class BpodBase(object):
             if (value < 0) or (value > 1):
                 raise BpodErrorException("Error: Enable value must be either 0 or 1.")
             
-            if not self._bpodcom_enable_analog_input_threshold(channel, threshold, value):
+            if not self._bpodcom_enable_analog_input_threshold(channel - 1, threshold - 1, value):  # subtract one to get the index
                 raise BpodErrorException("Error: Failed to enable analog input threshold.")
             
+        else:
+            raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
+
+    def read_analog_input(self):
+        """
+        While running a trial, any channels configured as analog inputs return samples to the PC via the analog serial port.
+        The data format on that port is: [TrialNumber, uint16] [Sample Ch0, uint16]...[Sample ChN, uint16].
+        Channels 0-N are not necessarily physical channels 0-N. Only channels configured as analog inputs return data, in rank order
+        (so if channels 2 and 4 are configured as analog inputs, you'd have:
+        [TrialNumber] [Sample1 from Ch2] [Sample1 from Ch4] [TrialNumber] [Sample2 from Ch2] [Sample2 from Ch4]...etc.
+        TrialNumber is reset at the beginning of each behavior session with op '*' on the state machine's primary port.
+
+        :return: List of samples for each analog input channel in uint16, including trial number with each sample.
+        :rtype list[int]:
+        """
+        if self._hardware.machine_type > 3:
+            return self._bpodcom_read_analog_input_samples(len(self._hardware.analog_input_channels))
         else:
             raise BpodErrorException("Error: Bpod hardware is not compatible. Only Bpod version r2+ contains the required Flex I/O channels to configure analog input.")
 

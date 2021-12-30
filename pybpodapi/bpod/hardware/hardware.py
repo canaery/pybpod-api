@@ -35,6 +35,8 @@ class Hardware(object):
         self.n_flex_channels = None
         self.flex_channel_types = None
 
+        self.analog_input_channels = None
+        self.analog_input_sampling_interval = None
         self.analog_input_thresholds_1 = None
         self.analog_input_thresholds_2 = None
         self.analog_input_threshold_polarity_1 = None

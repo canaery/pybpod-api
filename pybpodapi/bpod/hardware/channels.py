@@ -60,6 +60,7 @@ class EventsPositions(object):
         self.globalTimerTrigger = 0  # type: int
         self.globalTimerCancel = 0  # type: int
         self.globalCounter = 0  # type: int
+        self.globalCounterReset = 0  # type: int
         self.condition = 0  # type: int
         self.jump = 0  # type: int
         self.Tup = 0  # type: int
@@ -69,6 +70,8 @@ class EventsPositions(object):
         self.output_Wire = 0  # type: int
         self.output_PWM = 0  # type: int
         self.output_Flex = 0  # type: int
+        self.analogThreshEnable = 0  # type: int
+        self.analogThreshDisable = 0  # type: int
 
     def __str__(self):
         return (
@@ -83,6 +86,7 @@ class EventsPositions(object):
             "globalTimerTrigger: {globalTimerTrigger}\n"
             "globalTimerCancel: {globalTimerCancel}\n"
             "globalCounter: {globalCounter}\n"
+            "globalCounterReset: {globalCounterReset}\n"
             "condition: {condition}\n"
             "jump: {jump}\n"
             "Tup: {Tup}\n"
@@ -92,6 +96,8 @@ class EventsPositions(object):
             "output_Wire: {output_Wire}\n"
             "output_PWM: {output_PWM}\n"
             "output_Flex: {output_Flex}\n"
+            "analogThreshEnable: {analogThreshEnable}\n"
+            "analogThreshDisable: {analogThreshDisable}\n"
             "".format(
                Event_USB=self.Event_USB,
                Event_Port=self.Event_Port,
@@ -103,6 +109,7 @@ class EventsPositions(object):
                globalTimerTrigger=self.globalTimerTrigger,
                globalTimerCancel=self.globalTimerCancel,
                globalCounter=self.globalCounter,
+               globalCounterReset=self.globalCounterReset,
                condition=self.condition,
                jump=self.jump,
                Tup=self.Tup,
@@ -112,6 +119,8 @@ class EventsPositions(object):
                output_Wire=self.output_Wire,
                output_PWM=self.output_PWM,
                output_Flex=self.output_Flex,
+               analogThreshEnable=self.analogThreshEnable,
+               analogThreshDisable=self.analogThreshDisable
             )
         )
 
@@ -224,6 +233,9 @@ class Channels(object):
 
                 # This means the flex channel must be configured as output
                 else:
+                    self.input_channel_names += ["---"]  # Placeholder to maintain appropriate index
+                    self.event_names += ["---"]  # Placeholder for "high"/"trig1"
+                    self.event_names += ["---"]  # Placeholder for "low"/"trig2"
                     nFlex += 1  # increment to maintain flex_channel_types index
 
         self.events_positions.globalTimerStart = Pos
@@ -324,6 +336,7 @@ class Channels(object):
 
                 # This means the flex channel must be configured as input
                 else:
+                    self.output_channel_names += ["---"]  # placeholder to maintain appropriate index.
                     nFlex += 1  # increment to maintain the flex_channel_types index
 
         self.output_channel_names += ["GlobalTimerTrig"]
@@ -331,7 +344,14 @@ class Channels(object):
         self.output_channel_names += ["GlobalTimerCancel"]
         self.events_positions.globalTimerCancel = len(self.output_channel_names) - 1
         self.output_channel_names += ["GlobalCounterReset"]
+        self.events_positions.globalCounterReset = len(self.output_channel_names) - 1
 
+        if hardware.machine_type > 3:
+            self.output_channel_names += ["AnalogThreshEnable"]
+            self.events_positions.analogThreshEnable = len(self.output_channel_names) - 1
+            self.output_channel_names += ["AnalogThreshDisable"]
+            self.events_positions.analogThreshDisable = len(self.output_channel_names) - 1
+        
         logger.debug("output_channel_names: %s", self.output_channel_names)
         logger.debug("events_positions: %s", self.events_positions)
 

@@ -3,7 +3,7 @@
 
 import logging
 
-PYBPOD_API_LOG_LEVEL = logging.DEBUG
+PYBPOD_API_LOG_LEVEL = None  #logging.DEBUG
 PYBPOD_API_LOG_FILE = "pybpod-api.log"
 
 PYBPOD_API_MODULES = [
@@ -11,7 +11,7 @@ PYBPOD_API_MODULES = [
 ]
 
 # stream the session file to the stdin (terminal)
-PYBPOD_API_STREAM2STDOUT = False
+PYBPOD_API_STREAM2STDOUT = True
 # accept commands from the stdin
 PYBPOD_API_ACCEPT_STDIN = False
 

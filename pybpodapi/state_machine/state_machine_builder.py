@@ -3,6 +3,7 @@
 
 import logging
 import math
+from pybpodapi.bpod import hardware
 from pybpodapi.com.arcom import ArduinoTypes
 
 from pybpodapi.com.protocol.send_msg_headers import SendMessageHeader
@@ -115,12 +116,12 @@ class StateMachineBuilder(StateMachineBase):
             else self.highest_used_global_condition + 1
         )
 
-        message = [
+        message = ArduinoTypes.get_uint8_array([
             self.total_states_added,
             self.highest_used_global_timer,
             self.highest_used_global_counter,
             self.highest_used_global_condition,
-        ]
+        ])
 
         # STATE TIMER MATRIX
         # Send state timer transitions (for all states)
@@ -131,15 +132,13 @@ class StateMachineBuilder(StateMachineBase):
                 if math.isnan(self.state_timer_matrix[i])
                 else self.state_timer_matrix[i]
             ]
-
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("STATE TIMER MATRIX: %s", tmp)
 
         # INPUT MATRIX
         # Send event-triggered transitions (where they are different from default)
         tmp = []
         for i in range(self.total_states_added):
-
             state_transitions = self.input_matrix[i]
             n_transitions = len(state_transitions)
             tmp += [n_transitions]
@@ -149,7 +148,7 @@ class StateMachineBuilder(StateMachineBase):
                 tmp += [
                     self.total_states_added if math.isnan(dest_state) else dest_state
                 ]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("INPUT MATRIX: %s", tmp)
 
         # OUTPUT MATRIX
@@ -166,7 +165,7 @@ class StateMachineBuilder(StateMachineBase):
             tmp += [n_differences]
             for hw_conf in hw_state:
                 tmp += hw_conf[:2]
-        message += tmp
+        message += ArduinoTypes.get_uint16_array(tmp) if (self.hardware.machine_type > 3) else ArduinoTypes.get_uint8_array(tmp)
         logger.debug("OUTPUT MATRIX: %s", tmp)
 
         # GLOBAL_TIMER_START_MATRIX
@@ -185,7 +184,7 @@ class StateMachineBuilder(StateMachineBase):
                 tmp += [
                     self.total_states_added if math.isnan(dest_state) else dest_state
                 ]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_START_MATRIX: %s", tmp)
 
         # GLOBAL_TIMER_END_MATRIX
@@ -204,7 +203,7 @@ class StateMachineBuilder(StateMachineBase):
                 tmp += [
                     self.total_states_added if math.isnan(dest_state) else dest_state
                 ]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_END_MATRIX: %s", tmp)
 
         # GLOBAL_COUNTER_MATRIX
@@ -223,7 +222,7 @@ class StateMachineBuilder(StateMachineBase):
                 tmp += [
                     self.total_states_added if math.isnan(dest_state) else dest_state
                 ]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_COUNTER_MATRIX: %s", tmp)
 
         # CONDITION_MATRIX
@@ -241,15 +240,14 @@ class StateMachineBuilder(StateMachineBase):
                 tmp += [
                     self.total_states_added if math.isnan(dest_state) else dest_state
                 ]
-
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("CONDITION_MATRIX: %s", tmp)
 
         # GLOBAL_TIMER_CHANNELS
         tmp = []
         for i in range(self.highest_used_global_timer):
             tmp += [self.global_timers.channels[i]]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_CHANNELS: %s", tmp)
 
         # GLOBAL_TIMER_ON_MESSAGES
@@ -257,7 +255,7 @@ class StateMachineBuilder(StateMachineBase):
         for i in range(self.highest_used_global_timer):
             v = self.global_timers.on_messages[i]
             tmp += [255 if v == 0 else v]
-        message += tmp
+        message += ArduinoTypes.get_uint16_array(tmp) if (self.hardware.machine_type > 3) else ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_ON_MESSAGES: %s", tmp)
 
         # GLOBAL_TIMER_OFF_MESSAGES
@@ -265,54 +263,108 @@ class StateMachineBuilder(StateMachineBase):
         for i in range(self.highest_used_global_timer):
             v = self.global_timers.off_messages[i]
             tmp += [255 if v == 0 else v]
-        message += tmp
+        message += ArduinoTypes.get_uint16_array(tmp) if (self.hardware.machine_type > 3) else ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_OFF_MESSAGES: %s", tmp)
 
         # GLOBAL_TIMER_LOOP_MODE
         tmp = []
         for i in range(self.highest_used_global_timer):
             tmp += [self.global_timers.loop_mode[i]]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_LOOP_MODE: %s", tmp)
 
         # GLOBAL_TIMER_EVENTS
         tmp = []
         for i in range(self.highest_used_global_timer):
             tmp += [self.global_timers.send_events[i]]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_TIMER_EVENTS: %s", tmp)
 
         # GLOBAL_COUNTER_ATTACHED_EVENTS
         tmp = []
         for i in range(self.highest_used_global_counter):
             tmp += [self.global_counters.attached_events[i]]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_COUNTER_ATTACHED_EVENTS: %s", tmp)
 
         # CONDITIONS_CHANNELS
         tmp = []
         for i in range(self.highest_used_global_condition):
             tmp += [self.conditions.channels[i]]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("CONDITIONS_CHANNELS: %s", tmp)
 
         # CONDITIONS VALUES
         tmp = []
         for i in range(self.highest_used_global_condition):
             tmp += [self.conditions.values[i]]
-        message += tmp
+        message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("CONDITIONS VALUES: %s", tmp)
 
         # GLOBAL_COUNTER_RESETS
-        tmp = []
-        for i in range(self.total_states_added):
-            tmp += [self.global_counters.reset_matrix[i]]
-        message += tmp
+        if self.hardware.firmware_version < 23:
+            tmp = []
+            for i in range(self.total_states_added):
+                tmp += [self.global_counters.reset_matrix[i]]
+            message += ArduinoTypes.get_uint8_array(tmp)
+        else:
+            # In firmware v23, global counter reset is compressed, so only changes from the default matrix are sent.
+            tmp = []
+            gc_resets = [
+                (i, self.global_counters.reset_matrix[i])  # i is the state index. self.global_counters.reset_matrix[i] is the global counter number that is to be resetted.
+                for i in range(self.total_states_added)
+                if not (self.global_counters.reset_matrix[i] == 0)  # Check if different from the default matrix.
+            ]
+            n_overrides = len(gc_resets)
+            tmp += [n_overrides]
+            for gcr in gc_resets:  # gc_resets is a list of two-tuples.
+                tmp += gcr[:2]  # this appends just the two elements in the gcr tuple, but without the tuple structure (aka no parenthesis; flattens the nested containers).
+            message += ArduinoTypes.get_uint8_array(tmp)
         logger.debug("GLOBAL_COUNTER_RESETS: %s", tmp)
+        
+        # ANALOG THRESHOLDS
+        if self.hardware.machine_type > 3:
+            # ANALOG THRESHOLDS ENABLE
+            tmp = []
+            at_enables = []
+            for i in range(self.total_states_added):
+                at_enables += [
+                    (i, output[1])  # i is state index. output[1] is the output value whose bits indicate which flex channels to have their thresholds enabled.
+                    for output in self.output_matrix[i]  # loops through the list of tuples for the output actions of the i-th state.
+                    if (
+                        (output[0] == self.hardware.channels.events_positions.analogThreshEnable)  # output[0] is the output code that indicates the 'AnalogThreshEnable' action.
+                        and not (output[1] == 0)  # Check if different from the default matrix.
+                    )
+                ]
+            n_overrides = len(at_enables)
+            tmp += [n_overrides]
+            for at_en in at_enables:
+                tmp += at_en[:2]  # this appends just the two elements in the at_en tuple, but without the tuple structure (aka no parenthesis; flattens the nested containers).
+            message += ArduinoTypes.get_uint8_array(tmp)
+            logger.debug("ANALOG_THRESHOLDS_ENABLE: %s", tmp)
+
+            # ANALOG THRESHOLDS DISABLE
+            tmp = []
+            at_disables = []
+            for i in range(self.total_states_added):
+                at_disables += [
+                    (i, output[1])  # i is state index. output[1] is the output value whose bits indicate which flex channels to have their thresholds disabled.
+                    for output in self.output_matrix[i]  # loops through the list of tuples for the output actions of the i-th state.
+                    if (
+                        (output[0] == self.hardware.channels.events_positions.analogThreshDisable)  # output[0] is the output code that indicates the 'AnalogThreshDisable' action.
+                        and not (output[1] == 0)  # Check if different from the default matrix.
+                    )
+                ]
+            n_overrides = len(at_disables)
+            tmp += [n_overrides]
+            for at_dis in at_disables:
+                tmp += at_dis[:2]  # this appends just the two elements in the at_dis tuple, but without the tuple structure (aka no parenthesis; flattens the nested containers).
+            message += ArduinoTypes.get_uint8_array(tmp)
+            logger.debug("ANALOG_THRESHOLDS_DISABLE: %s", tmp)
 
         self.state_timers = self.state_timers[: self.total_states_added]
 
-        return ArduinoTypes.get_uint8_array(message)
+        return message
 
     def build_message_global_timer(self):
 
@@ -371,6 +423,31 @@ class StateMachineBuilder(StateMachineBase):
 
         return ArduinoTypes.get_uint32_array(thirty_two_bit_message)
 
+    def build_message_additional_ops(self):
+        """
+        Additional ops can be packaged with state machine description to configure parts
+        of the state machine during trial onset (e.g. programming serial message library).
+        This is mandatory to avoid disruptions when the next trial's state machine
+        description is sent during the current trial.
+        """
+        additional_ops_msg = []
+        contains_additional_ops = 1  # One indicates that there are additional ops that the state machine must read.
+        
+        if self.serial_message_mode == 1:  # If using implicit serial messages.
+            n_modules_loaded = 0
+            for i in range(self.hardware.n_uart_channels):  # Loop through each uart channel index.
+                if self.n_serial_messages[i] > 0:  # If any serial messages exists for uart channel i.
+                    additional_ops_msg += [contains_additional_ops, ord(SendMessageHeader.LOAD_SERIAL_MESSAGE), i, self.n_serial_messages[i]]
+                    
+                    for j in range(self.n_serial_messages[i]):  # Loop through each serial message loaded for uart channel i.
+                        ser_msg = self.serial_messages[i][j]  # Get serial message j for uart channel i.
+                        additional_ops_msg += [j, len(ser_msg), ser_msg]
+                    n_modules_loaded += 1
+            
+        contains_additional_ops = 0  # Zero indicates that there are no more additional ops for the state machine to read.
+        additional_ops_msg += [contains_additional_ops]
+        return ArduinoTypes.get_uint8_array(additional_ops_msg)
+            
 
 class StateMachineBuilderError(Exception):
     pass

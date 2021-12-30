@@ -129,7 +129,7 @@ class BpodCOMProtocol(BpodBase):
         """
         Signal Bpod device to disconnect now
         """
-        logger.debug("Requesting disconnect (%s)", SendMessageHeader.DISCONNECT)
+        logger.debug("Requesting disconnect ('%s')", SendMessageHeader.DISCONNECT)
 
         self._arcom.write_char(SendMessageHeader.DISCONNECT)
 
@@ -149,11 +149,11 @@ class BpodCOMProtocol(BpodBase):
         :rtype: bool
         """
 
-        logger.debug("Requesting handshake (%s)", SendMessageHeader.HANDSHAKE)
+        logger.debug("Requesting handshake ('%s')", SendMessageHeader.HANDSHAKE)
         self._arcom.write_char(SendMessageHeader.HANDSHAKE)
 
         response = self._arcom.read_char()  # Receive response
-        logger.debug("Response command is: %s", response)
+        logger.debug("Response command is: '%s'", response)
 
         return response == ReceiveMessageHeader.HANDSHAKE_OK
 
@@ -166,7 +166,7 @@ class BpodCOMProtocol(BpodBase):
         :rtype: bool
         """
         
-        logger.debug("Requesting handshake for secondary serial port (%s)", SendMessageHeader.SECONDARY_PORT_HANDSHAKE)
+        logger.debug("Requesting handshake for secondary serial port ('%s')", SendMessageHeader.SECONDARY_PORT_HANDSHAKE)
         self._arcom.write_char(SendMessageHeader.SECONDARY_PORT_HANDSHAKE)  # Send from the primary serial port.
 
         response = self._arcom_secondary.read_uint8()  # Read from the secondary serial port.
@@ -183,7 +183,7 @@ class BpodCOMProtocol(BpodBase):
         :rtype: bool
         """
         
-        logger.debug("Requesting handshake for analog serial port (%s)", SendMessageHeader.ANALOG_PORT_HANDSHAKE)
+        logger.debug("Requesting handshake for analog serial port ('%s')", SendMessageHeader.ANALOG_PORT_HANDSHAKE)
         self._arcom.write_char(SendMessageHeader.ANALOG_PORT_HANDSHAKE)  # Send from the primary serial port.
 
         response = self._arcom_analog.read_uint8()  # Read from the analog serial port.
@@ -199,7 +199,7 @@ class BpodCOMProtocol(BpodBase):
         :rtype: int, int
         """
 
-        logger.debug("Requesting firmware version (%s)", SendMessageHeader.FIRMWARE_VERSION)
+        logger.debug("Requesting firmware version ('%s')", SendMessageHeader.FIRMWARE_VERSION)
 
         self._arcom.write_char(SendMessageHeader.FIRMWARE_VERSION)
 
@@ -259,7 +259,7 @@ class BpodCOMProtocol(BpodBase):
         :param Hardware hardware: hardware
         """
 
-        logger.debug("Requesting hardware description (%s)...", SendMessageHeader.HARDWARE_DESCRIPTION)
+        logger.debug("Requesting hardware description ('%s')...", SendMessageHeader.HARDWARE_DESCRIPTION)
         self._arcom.write_char(SendMessageHeader.HARDWARE_DESCRIPTION)
 
         max_states = self._arcom.read_uint16()  # type: int
@@ -337,7 +337,7 @@ class BpodCOMProtocol(BpodBase):
             hardware.inputs_enabled[i] = settings.BPOD_FLEX_PORTS_ENABLED[j]
         #############################################################################################
 
-        logger.debug("Requesting ports enabling (%s)", SendMessageHeader.ENABLE_PORTS)
+        logger.debug("Requesting ports enabling ('%s')", SendMessageHeader.ENABLE_PORTS)
         logger.debug("Inputs enabled (%s): %s", len(hardware.inputs_enabled), hardware.inputs_enabled)
 
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.ENABLE_PORTS)] + hardware.inputs_enabled)
@@ -359,7 +359,7 @@ class BpodCOMProtocol(BpodBase):
         :rtype: bool
         """
 
-        logger.debug("Requesting sync channel and mode (%s)", SendMessageHeader.SYNC_CHANNEL_MODE)
+        logger.debug("Requesting sync channel and mode ('%s')", SendMessageHeader.SYNC_CHANNEL_MODE)
 
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SYNC_CHANNEL_MODE), sync_channel, sync_mode])
 
@@ -428,7 +428,7 @@ class BpodCOMProtocol(BpodBase):
         """
         # self.__bpodcom_check_com_ready()
 
-        logger.debug("Requesting state machine run (%s)", SendMessageHeader.RUN_STATE_MACHINE)
+        logger.debug("Requesting state machine run ('%s')", SendMessageHeader.RUN_STATE_MACHINE)
 
         self._arcom.write_char(SendMessageHeader.RUN_STATE_MACHINE)
 
@@ -560,7 +560,7 @@ class BpodCOMProtocol(BpodBase):
 
         message_container = [serial_channel-1, n_messages, message_id, len(serial_message)] + serial_message
 
-        logger.debug("Requesting load serial message (%s)", SendMessageHeader.LOAD_SERIAL_MESSAGE)
+        logger.debug("Requesting load serial message ('%s')", SendMessageHeader.LOAD_SERIAL_MESSAGE)
         logger.debug("Message: %s", message_container)
 
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.LOAD_SERIAL_MESSAGE)] + message_container)
@@ -579,7 +579,7 @@ class BpodCOMProtocol(BpodBase):
 
         :rtype: bool
         """
-        logger.debug("Requesting serial messages reset (%s)", SendMessageHeader.RESET_SERIAL_MESSAGES)
+        logger.debug("Requesting serial messages reset ('%s')", SendMessageHeader.RESET_SERIAL_MESSAGES)
 
         self._arcom.write_char(SendMessageHeader.RESET_SERIAL_MESSAGES)
 
@@ -621,7 +621,7 @@ class BpodCOMProtocol(BpodBase):
         :rtype: bool
         """
 
-        logger.debug("Setting Flex channel types (%s)", SendMessageHeader.SET_FLEX_CHANNEL_TYPES)
+        logger.debug("Setting Flex channel types ('%s')", SendMessageHeader.SET_FLEX_CHANNEL_TYPES)
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_FLEX_CHANNEL_TYPES)] + channel_types)
         self._arcom.write_array(bytes2send)
 
@@ -636,13 +636,35 @@ class BpodCOMProtocol(BpodBase):
         :rtype: list[int]
         """
 
-        logger.debug("Requesting current flex channel types (%s)", SendMessageHeader.GET_FLEX_CHANNEL_TYPES)
+        logger.debug("Requesting current flex channel types ('%s')", SendMessageHeader.GET_FLEX_CHANNEL_TYPES)
         self._arcom.write_char(SendMessageHeader.GET_FLEX_CHANNEL_TYPES)
         
         flex_channel_types = self._arcom.read_uint8_array(n_flex_channels)
         logger.debug("Read current Flex channel types: %s", flex_channel_types)
         
         return flex_channel_types
+    
+    def _bpodcom_set_analog_input_sampling_interval(self, sampling_interval):
+        """
+        Set the sampling interval for all flex channels configured as analog input. Compatible only with Bpod r2+ (machine type 4).
+        
+        Example: If the Bpod's state machine timer period is 100 microseconds (as is the case with the Bpod r2+) and the sampling_interval
+        parameter is given a value of 10 cycles, then the analog input channels will be sampled once every 10 clock cycles of the state machine
+        timer, resulting in a sampling frequency of ( 1 / (100 us/cycle * 10 cycles) ) = 1000 Hz.
+
+        :param int sampling_interval: Interval at which to sample analog input flex channels. Units are state machine clock cycles.
+        :rtype bool
+        """
+        bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_SAMPLING_INTERVAL)])
+        bytes2send += ArduinoTypes.get_uint32_array([sampling_interval])
+
+        logger.debug("Setting analog input sampling interval ('%s')", SendMessageHeader.SET_ANALOG_INPUT_SAMPLING_INTERVAL)
+        self._arcom.write_array(bytes2send)
+
+        response = self._arcom.read_uint8()  # type: int
+        logger.debug("Response: %s", response)
+
+        return (response == ReceiveMessageHeader.SET_ANALOG_INPUT_SAMPLING_INTERVAL_OK)
     
     def _bpodcom_set_analog_input_thresholds(self, thresholds_1, thresholds_2):
         """
@@ -656,7 +678,7 @@ class BpodCOMProtocol(BpodBase):
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_THRESHOLDS)])
         bytes2send += ArduinoTypes.get_uint16_array(thresholds_1 + thresholds_2)
         
-        logger.debug("Setting analog input thresholds (%s)", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLDS)
+        logger.debug("Setting analog input thresholds ('%s')", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLDS)
         self._arcom.write_array(bytes2send)
 
         response = self._arcom.read_uint8()  # type: int
@@ -676,7 +698,7 @@ class BpodCOMProtocol(BpodBase):
         """
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_POLARITY)] + polarity_1 + polarity_2)
         
-        logger.debug("Setting analog input threshold polarity (%s)", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_POLARITY)
+        logger.debug("Setting analog input threshold polarity ('%s')", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_POLARITY)
         self._arcom.write_array(bytes2send)
 
         response = self._arcom.read_uint8()  # type: int
@@ -695,7 +717,7 @@ class BpodCOMProtocol(BpodBase):
         """
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_MODE)] + modes)
         
-        logger.debug("Setting analog input threshold mode (%s)", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_MODE)
+        logger.debug("Setting analog input threshold mode ('%s')", SendMessageHeader.SET_ANALOG_INPUT_THRESHOLD_MODE)
         self._arcom.write_array(bytes2send)
 
         response = self._arcom.read_uint8()  # type: int
@@ -714,13 +736,34 @@ class BpodCOMProtocol(BpodBase):
         """
         bytes2send = ArduinoTypes.get_uint8_array([ord(SendMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD), channel, threshold, value])
 
-        logger.debug("Enabling analog input threshold (%s)", SendMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD)
+        logger.debug("Enabling analog input threshold ('%s')", SendMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD)
         self._arcom.write_array(bytes2send)
 
         response = self._arcom.read_uint8()  # type: int
         logger.debug("Response: %s", response)
 
         return (response == ReceiveMessageHeader.ENABLE_ANALOG_INPUT_THRESHOLD_OK)
+    
+    def _bpodcom_read_analog_input_samples(self, n_channels):
+        """
+        While running a trial, any channels configured as analog inputs return samples to the PC via the analog serial port.
+        The data format on that port is: [TrialNumber, uint16] [Sample Ch0, uint16]...[Sample ChN, uint16].
+        Channels 0-N are not necessarily physical channels 0-N. Only channels configured as analog inputs return data, in rank order
+        (so if channels 2 and 4 are configured as analog inputs, you'd have:
+        [TrialNumber] [Sample1 from Ch2] [Sample1 from Ch4] [TrialNumber] [Sample2 from Ch2] [Sample2 from Ch4]...etc.
+        TrialNumber is reset at the beginning of each behavior session with op '*' on the state machine's primary port.
+
+        :param int n_channels: number of flex channels configured as analog input.
+        :return: List of samples for each analog input channel in uint16, including trial number with each sample.
+        :rtype list[int]:
+        """
+        n_bytes_available = self._arcom_analog.bytes_available()
+        if n_bytes_available > 0:
+            n_samples = int(n_bytes_available / (2 * (n_channels + 1)))  # Add 1 to n_channels to account for the trial number, which must be read before the sample(s). Each sample and trial number is uint16 which is 2 bytes.
+            if n_samples > 0:
+                msg = self._arcom_analog.read_uint16_array((n_samples * (n_channels + 1)))
+                return msg
+        return []  # return an empty list if nothing to be read.
     
     def _bpodcom_identify_USB_serial_ports(self):
         """

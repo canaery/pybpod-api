@@ -86,6 +86,21 @@ class StateMachineBase(object):
         # output actions
         self.output_matrix = [[] for i in range(self.hardware.max_states)]
 
+        # 0 = manually program serial message library with load_serial_message() function.
+        # 1 = implicitly program from the state machine during trial onset.
+        self.serial_message_mode = 0
+        self.n_serial_messages = [0] * self.hardware.n_uart_channels  # List of the number of serial messages for each channel.
+        
+        # self.serial_messages (below) is a list of dicts where each dict contains all the serial messages (up to 256) of each uart channel.
+        # Contains two types of keys: one key type is the serial message list converted to a string whose paired value
+        # is the serial message's index (for use by the bpod to store the message in an array), the second key type is
+        # the serial message's index (int) whose paired value is the serial message list itself (for building the state machine).
+        # Combination of these two is used for instant access to check if the serial message has been stored already and to
+        # get the message and index instead of looping through a list of serial messages and comparing the serial message
+        # that is to be used with the serial messages already stored to find out if it is a new serial message to be loaded.
+        # Of course, this can also be separated into two lists of dicts.
+        self.serial_messages = [{}] * self.hardware.n_uart_channels
+        
         self.is_running = False
 
     def add_state(
@@ -215,9 +230,8 @@ class StateMachineBase(object):
 
             else:
                 try:
-                    output_code = self.hardware.channels.output_channel_names.index(
-                        action_name
-                    )
+                    output_code = self.hardware.channels.output_channel_names.index(action_name)
+                
                 except:
                     raise SMAError(
                         "Error creating state: "
@@ -230,21 +244,84 @@ class StateMachineBase(object):
                 output_value = action_value
 
             if action_name == OutputChannel.GlobalCounterReset:
-                self.global_counters.reset_matrix[output_value] = 1
+                self.global_counters.reset_matrix[output_value] = 1  # output_value (or action_value) is actually the global counter number that is to be resetted.
 
             # For backwards compatability, integers specifying global timers convert to equivalent binary decimals.
             # To specify binary, use a string of bits.
-            if (
-                output_code
-                == self.hardware.channels.events_positions.globalTimerTrigger
-            ):
-                self.global_timers.triggers_matrix[state_name_idx] = 2 ** (
-                    output_value - 1
-                )
+            if (output_code == self.hardware.channels.events_positions.globalTimerTrigger):
+                self.global_timers.triggers_matrix[state_name_idx] = 2 ** (output_value - 1)
 
             if output_code == self.hardware.channels.events_positions.globalTimerCancel:
                 self.global_timers.cancels_matrix[output_value - 1] = 1
 
+            # Check if output_code refers to a flex channel.
+            if (output_code >= self.hardware.channels.events_positions.output_Flex) and (output_code < self.hardware.channels.events_positions.output_BNC):
+                flex_channel = output_code - self.hardware.channels.events_positions.output_Flex  # Find the flex channel index.
+                if self.hardware.flex_channel_types[flex_channel] == 3:
+                    # This means the flex channel is configured for analog output, so convert voltage to the integer bit value.
+                    maxFlexVoltage = 5
+                    if (action_value < 0) or (action_value > maxFlexVoltage):
+                        raise SMAError("Error creating state: Flex channel voltages must be in the range [0, 5]")
+                    output_value = round((action_value / maxFlexVoltage) * 4095)
+            
+            # Check if output_code refers to AnalogThreshEnable/Disable.
+            if ((output_code == self.hardware.channels.events_positions.analogThreshEnable)
+                or (output_code == self.hardware.channels.events_positions.analogThreshDisable)):
+                # Convert the ones and zeros (that represent each flex channel) into a single integer value.
+                if isinstance(action_value, list) and (len(action_value) == self.hardware.n_flex_channels):
+                    try:
+                        # If list of integer ones and zeros, concatenate to a string and then convert the binary to the integer value.
+                        output_value = int("".join(str(x) for x in action_value), base=2)
+                    except ValueError:
+                        raise SMAError("Error creating state: AnalogThreshEnable/Disable action value must contain only ones and zeros.")
+                elif isinstance(action_value, str) and (len(action_value) == self.hardware.n_flex_channels):
+                    try:
+                        # If string of ones and zeros, convert to the integer value.
+                        output_value = int(action_value, base=2)
+                    except ValueError:
+                        raise SMAError("Error creating state: AnalogThreshEnable/Disable action value must contain only ones and zeros.")
+                else:
+                    raise SMAError(
+                        "Error creating state: AnalogThreshEnable/Disable action value must be either a list or string of ones and zeros and of "
+                        "length equal to the number of flex channels where each bit indicates the flex channel to enable/disable thresholds on. "
+                        "Binary is MSB first so the rightmost bit will be flex channel index 0."
+                        "Note that a zero bit in the AnalogThreshEnable action does not disable thresholds on that flex channel and a zero bit "
+                        "in the AnalogThreshDisable action does not enable thresholds on that flex channel."
+                    )
+            
+            # Check if output_code refers to a UART serial channel (aka module).
+            if (output_code < self.hardware.channels.events_positions.output_USB):
+                if isinstance(action_value, list):
+                    # This means implicit programming of serial message library.
+                    if (len(action_value) == 0) or (len(action_value) > self.hardware.serial_message_max_bytes):
+                        raise SMAError("Error creating state: serial message cannot be empty or greater than %s bytes.", self.hardware.serial_message_max_bytes)
+                    
+                    self.serial_message_mode = 1
+                    if str(action_value) not in self.serial_messages[output_code]:
+                        if self.n_serial_messages[output_code] < 256:
+                            # This means the serial message is new and has not yet been loaded.
+                            # So convert the serial message list to a string and use that to create a key in the dictionary
+                            # for the specified UART channel (output_code indicates the index of UART channel) and set the
+                            # value of the key to be the serial message number (aka the index). Then use the message index to
+                            # create another key in the same dictionary and set the value of that key to be the actual serial
+                            # message list. This will allow for instant retrieval of the message index when the message has
+                            # been loaded and is used again. The message index is used by the Bpod to retrieve the message
+                            # within the Bpod's serial message library (firmware stores all loaded serial messages in an array).
+                            msg_index = self.n_serial_messages[output_code]
+                            self.serial_messages[output_code][str(action_value)] = msg_index  # This allows instant checking whether message was loaded already or not.
+                            self.serial_messages[output_code][msg_index] = action_value  # This allows instant retrieval of the message (used later when building the state machine matrix).
+                            self.n_serial_messages[output_code] += 1  # increment the index.
+                            output_value = msg_index  # Assign the index to the output value because the Bpod will use the index to retrieve the stored serial message.
+                        else:
+                            raise SMAError("Error creating state: Cannot load more than 256 different serial messages on a single UART channel.")
+                    else:
+                        # This means the serial message is not new and is already stored in the serial message library.
+                        # So convert the serial message list to a string and use that as a key in the dictionary for the
+                        # specified UART channel (output_code indicates the index of the UART channel) to find the message's index.
+                        msg_index = self.serial_messages[output_code][str(action_value)]
+                        output_value = msg_index  # Assign the index to the output value because the Bpod will use the index to retrieve the stored serial message.
+
+            
             self.output_matrix[state_name_idx].append((output_code, output_value))
 
         self.total_states_added += 1

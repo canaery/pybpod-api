@@ -34,6 +34,9 @@ class ReceiveMessageHeader(object):
     #: Success code from SET_FLEX_CHANNEL_TYPES command
     SET_FLEX_CHANNEL_TYPES_OK = 1
     
+    #: Success code from SET_ANALOG_INPUT_SAMPLING_INTERVAL command
+    SET_ANALOG_INPUT_SAMPLING_INTERVAL_OK = 1
+    
     #: Success code from SET_ANALOG_INPUT_THRESHOLDS command
     SET_ANALOG_INPUT_THRESHOLDS_OK = 1
 
