@@ -235,7 +235,9 @@ class Channels(object):
                 else:
                     self.input_channel_names += ["---"]  # Placeholder to maintain appropriate index
                     self.event_names += ["---"]  # Placeholder for "high"/"trig1"
+                    Pos += 1
                     self.event_names += ["---"]  # Placeholder for "low"/"trig2"
+                    Pos += 1
                     nFlex += 1  # increment to maintain flex_channel_types index
 
         self.events_positions.globalTimerStart = Pos
