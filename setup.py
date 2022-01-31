@@ -8,6 +8,8 @@ requirements = [
     "confapp",
     "pyserial",
     "logging-bootstrap",
+    "python-dateutil",
+    "safe-and-collaborative-architecture"
 ]
 
 setup(
@@ -19,6 +21,7 @@ setup(
         "Carlos Mão de Ferro",
         "Ricardo Ribeiro",
         "Luís Teixeira",
+        "Mohamed Elgohary"
     ],
     author_email="joshua21@gmail.com, cajomferro@gmail.com, ricardojvr@gmail.com, micboucinha@gmail.com",
     license="MIT",
