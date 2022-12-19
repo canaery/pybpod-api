@@ -43,11 +43,10 @@ This is Open Source software with an MIT license.
         Define the API_LOG_LEVEL with logging.DEBUG if you want detailed logging for the API
 
 2. On the project root folder run:
-    
-        pip3 install -r requirements.txt --upgrade # installs dependencies
+
         pip3 install . # installs this API
     
 3. Then move to the examples folder and run example:
  
         cd PROJECT_FOLDER/examples/function_examples
-        python3 add_trial_events.py # run example
+        python3 bpod_info.py # run example

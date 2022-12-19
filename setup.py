@@ -9,7 +9,8 @@ requirements = [
     "pyserial",
     "logging-bootstrap",
     "python-dateutil",
-    "safe-and-collaborative-architecture"
+    "safe-and-collaborative-architecture",
+    "numpy"
 ]
 
 setup(
